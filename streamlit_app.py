@@ -51,7 +51,7 @@ for i, (rank_name, score) in enumerate(rank_scores.items()):
     with cols[i]:
         st.subheader(rank_name)
         # 使用動態 Key 確保每場重置介面
-        style = st.selectbox(f"跑法", ["領放", "中段", "後追"], key=f"style_sel_{current_race_num}_{i}")
+        style = st.selectbox(f"跑法", ["領放", "中置", "後追"], key=f"style_sel_{current_race_num}_{i}")
         draw = st.selectbox(f"檔位", ["內欄", "二疊", "外檔"], key=f"draw_sel_{current_race_num}_{i}")
         current_input.append({
             "場次": current_race_num, 
@@ -76,7 +76,7 @@ if st.session_state.race_history:
     draw_stats = full_df.groupby('檔位')['得分'].sum().reset_index()
 
     # 確保所有類別都出現在圖表中（即使是0分）
-    style_stats = style_stats.set_index('跑法').reindex(["領放", "中段", "後追"], fill_value=0).reset_index()
+    style_stats = style_stats.set_index('跑法').reindex(["領放", "中置", "後追"], fill_value=0).reset_index()
     draw_stats = draw_stats.set_index('檔位').reindex(["內欄", "二疊", "外檔"], fill_value=0).reset_index()
 
     col_res1, col_res2 = st.columns(2)
@@ -85,7 +85,7 @@ if st.session_state.race_history:
         st.subheader("🏃 跑法累積得分 (靜態圖)")
         # 使用 Plotly 建立棒形圖
         fig_style = px.bar(style_stats, x='跑法', y='得分', color='跑法', 
-                           color_discrete_map={"領放":"#FF4B4B", "中段":"#FFAA00", "後追":"#1C83E1"})
+                           color_discrete_map={"領放":"#FF4B4B", "中置":"#FFAA00", "後追":"#1C83E1"})
         # 禁用所有拖拽與工具列
         st.plotly_chart(fig_style, use_container_width=True, config={'staticPlot': True})
         st.dataframe(style_stats.sort_values(by='得分', ascending=False), hide_index=True)
