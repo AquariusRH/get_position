@@ -32,8 +32,8 @@ if st.button("僅抓取 Data"):
             
             # 顯示原始的前 500 個字節，看看有沒有奇怪的符號 (例如 BOM)
             raw_data = response.content
-            st.subheader("原始數據前 500 個字節 (Binary):")
-            st.code(raw_data[:500])
+            st.subheader("原始數據前 1000 個字節 (Binary):")
+            st.code(raw_data[:1000])
             
             # 嘗試用普通 text 顯示 (不進行 JSON 轉換)
             st.subheader("原始文本內容 (Raw Text):")
