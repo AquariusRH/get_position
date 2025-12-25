@@ -7,7 +7,7 @@ st.set_page_config(page_title="賽馬多場累積分析器", layout="wide")
 if 'race_history' not in st.session_state:
     st.session_state.race_history = []
 
-st.title("🐎 賽馬算法：多場累積偏差分析")
+st.title("🐎賽馬算法：多場累積偏差分析")
 
 # 側邊欄：管理與重置
 with st.sidebar:
