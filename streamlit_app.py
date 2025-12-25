@@ -1,94 +1,96 @@
 import streamlit as st
 import pandas as pd
-import json
+import requests
 import base64
 from io import BytesIO
 from PIL import Image
 
-# --- 頁面設定 ---
-st.set_page_config(page_title="HKJC Speed Map 分析器", layout="wide")
-st.title("🏇 馬會走位圖自動分類工具")
+# 頁面配置
+st.set_page_config(page_title="HKJC SpeedPro 自動分析", layout="wide")
+st.title("🏇 香港賽馬會 SpeedPRO 走位全自動分析")
 
-# --- 模擬數據處理函數 (你可以更換為 requests.get(url).json()) ---
-def process_hkjc_data(json_input):
+# --- 1. 定義數據抓取函數 ---
+def get_race_data(race_no):
+    # 根據你提供的路徑拼接 URL
+    url = f"https://racing.hkjc.com/racing/speedpro/assets/json/formguide/race_{race_no}.json"
+    
+    # 根據你截圖中的 Request Headers 設定
+    headers = {
+        "authority": "racing.hkjc.com",
+        "accept": "*/*",
+        "accept-language": "zh-HK,zh-TW;q=0.9,zh;q=0.8,en-US;q=0.7,en;q=0.6",
+        "referer": "https://racing.hkjc.com/racing/speedpro/chinese/formguide/formguide.html",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "adrum": "isAjax:true"
+    }
+    
     try:
-        # 1. 解析 Base64 走位圖
-        if "RaceMapChi" in json_input:
-            img_b64 = json_input["RaceMapChi"].split(",")[1]
-            img_bytes = base64.b64decode(img_b64)
-            speed_map_img = Image.open(BytesIO(img_bytes))
-        else:
-            speed_map_img = None
-
-        # 2. 解析馬匹座標並分類 (假設數據在 SpeedPRO 的第一個項目中)
-        runners = json_input["SpeedPRO"][0]["runnerrecords"]
-        processed_list = []
-
-        for r in runners:
-            # 取得馬號與座標 (lbx, lby 是馬會常用的座標欄位)
-            # 註：若 JSON 欄位名稱不同，請依據實際截圖修改
-            no = r.get("no") or r.get("HorseNo")
-            x = r.get("lbx", 0)  # 水平座標
-            y = r.get("lby", 0)  # 垂直座標
-
-            # --- 分類邏輯 ---
-            # 1. 跑法 (領放/中段/後追) - X 軸通常越大越前面
-            if x > 700: run_style = "領放 🟢"
-            elif x > 300: run_style = "中段 🟡"
-            else: run_style = "後追 🔴"
-
-            # 2. 疊數 (近欄/二疊/外圍) - Y 軸通常越小越貼欄
-            if y < 30: lane_style = "近欄 (1疊)"
-            elif y < 70: lane_style = "二疊"
-            else: lane_style = "外圍 (3疊+)"
-
-            processed_list.append({
-                "馬號": no,
-                "跑法分類": run_style,
-                "位置疊數": lane_style,
-                "X座標": x,
-                "Y座標": y
-            })
-
-        return speed_map_img, pd.DataFrame(processed_list)
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        return response.json()
     except Exception as e:
-        st.error(f"數據解析失敗: {e}")
-        return None, None
+        st.error(f"獲取數據失敗: {e}")
+        return None
 
-# --- Streamlit 介面 ---
-st.sidebar.header("數據輸入")
-json_text = st.sidebar.text_area("請貼上 race_1.json 的完整內容", height=300)
+# --- 2. 側邊欄控制 ---
+st.sidebar.header("設定")
+race_num = st.sidebar.selectbox("選擇場次", range(1, 13), index=0)
 
-if json_text:
-    data = json.loads(json_text)
-    img, df = process_hkjc_data(data)
+if st.sidebar.button("開始自動分析"):
+    data = get_race_data(race_num)
+    
+    if data:
+        # 顯示賽事資訊
+        info = data.get("RaceInfoChi", {})
+        st.subheader(f"第 {race_num} 場 - {info.get('RaceName', '')} ({info.get('Distance', '')})")
+        st.write(f"日期: {info.get('Date', '')} | 場地: {info.get('Racecourse', '')} {info.get('Track', '')}")
 
-    if img:
-        st.subheader("🖼️ 原始走位圖 (Base64 提取)")
-        st.image(img, use_container_width=True)
-
-    if df is not None:
-        st.divider()
-        st.subheader("📊 自動分類結果")
+        # --- 3. 處理並顯示走位圖 ---
+        col1, col2 = st.columns([1, 1])
         
-        # 建立過濾器
-        col1, col2 = st.columns(2)
         with col1:
-            f_style = st.multiselect("篩選跑法", options=df["跑法分類"].unique(), default=df["跑法分類"].unique())
+            st.markdown("### 🖼️ 原始走位圖")
+            if "RaceMapChi" in data:
+                img_b64 = data["RaceMapChi"].split(",")[1]
+                img_bytes = base64.b64decode(img_b64)
+                st.image(Image.open(BytesIO(img_bytes)), use_container_width=True)
+
+        # --- 4. 解析數據並進行分類 ---
         with col2:
-            f_lane = st.multiselect("篩選疊數", options=df["位置疊數"].unique(), default=df["位置疊數"].unique())
+            st.markdown("### 📊 自動分類紀錄")
+            try:
+                # 取得 SpeedPRO 內馬匹紀錄 (對應截圖中的 runnerrecords)
+                runners = data["SpeedPRO"][0].get("runnerrecords", [])
+                analysis_results = []
 
-        filtered_df = df[df["跑法分類"].isin(f_style) & df["位置疊數"].isin(f_lane)]
-        
-        # 顯示表格
-        st.dataframe(
-            filtered_df.sort_values(by="X座標", ascending=False), 
-            column_order=("馬號", "跑法分類", "位置疊數"),
-            use_container_width=True
-        )
+                for r in runners:
+                    no = r.get("no")
+                    # 抓取座標 lbx (橫向) 與 lby (縱向)
+                    x = r.get("lbx", 0)
+                    y = r.get("lby", 0)
 
-else:
-    st.info("請在左側貼上從 F12 獲取的 JSON 內容來開始分析。")
+                    # --- 分類邏輯 ---
+                    # 1. 跑法分類 (X 軸) - 數值越大代表越靠前
+                    if x > 750: run_style = "領放"
+                    elif x > 350: run_style = "中段"
+                    else: run_style = "後追"
 
-# --- 頁尾說明 ---
-st.caption("註：跑法分類基準值(X:300/700)可根據不同場次路程自行調整。")
+                    # 2. 疊數分類 (Y 軸) - 數值越小代表越近欄
+                    if y < 35: lane_pos = "近欄"
+                    elif y < 75: lane_pos = "二疊"
+                    else: lane_pos = "外圍"
+
+                    analysis_results.append({
+                        "馬號": no,
+                        "跑法紀錄": run_style,
+                        "位置紀錄": lane_pos,
+                        "座標(X,Y)": f"({x}, {y})"
+                    })
+
+                # 顯示結果表格
+                df = pd.DataFrame(analysis_results)
+                st.dataframe(df.sort_values("馬號"), use_container_width=True, hide_index=True)
+                
+                # 下載按鈕
+                csv = df.to_csv(index=False).encode('utf-8-sig')
+                st.download_button("下載分析報表 (CSV)", csv, f
