@@ -1,48 +1,45 @@
 import streamlit as st
 import requests
+import json
 
-st.title("HKJC 數據抓取測試")
-
-# 設置場次
-race_num = st.sidebar.number_input("場次", min_value=1, max_value=14, value=1)
-
-# 使用你提供的最新 Header 資訊
+# 設定 Header 確保連線權限
 headers = {
     "authority": "racing.hkjc.com",
     "accept": "*/*",
-    "accept-language": "zh-HK,zh-TW;q=0.9,zh;q=0.8,en-US;q=0.7,en;q=0.6",
-    "adrum": "isAjax:true",
-    "referer": f"https://racing.hkjc.com/racing/speedpro/chinese/formguide/formguide.html?race={race_num}",
-    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+    "referer": "https://racing.hkjc.com/racing/speedpro/chinese/formguide/formguide.html",
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+    "adrum": "isAjax:true"
 }
 
-url = f"https://racing.hkjc.com/racing/speedpro/assets/json/formguide/race_{race_num}.json"
+st.title("HKJC RaceMapChi 提取測試")
 
-if st.button("僅抓取 Data"):
-    try:
-        # 發起請求
-        response = requests.get(url, headers=headers, timeout=10)
+race_no = st.number_input("場次", min_value=1, value=1)
+url = f"https://racing.hkjc.com/racing/speedpro/assets/json/formguide/race_{race_no}.json"
+
+if st.button("獲取原始數據"):
+    response = requests.get(url, headers=headers)
+    
+    if response.status_code == 200:
+        # 處理 BOM 並讀取內容
+        content = response.content.decode('utf-8-sig')
+        data = json.loads(content)
         
-        # 顯示狀態
-        st.write(f"**URL:** {url}")
-        st.write(f"**HTTP 狀態碼:** {response.status_code}")
-        
-        if response.status_code == 200:
-            st.success("成功抓取數據！")
+        # 1. 檢查是否存在該欄位
+        if "RaceMapChi" in data:
+            st.success("成功找到 'RaceMapChi' 欄位！")
             
-            # 顯示原始的前 500 個字節，看看有沒有奇怪的符號 (例如 BOM)
-            raw_data = response.content
-            st.subheader("原始數據前 1000 個字節 (Binary):")
-            st.code(raw_data[:1000])
+            # 2. 顯示原始 Base64 字串的前段 (避免頁面因字串過長崩潰)
+            raw_b64 = data["RaceMapChi"]
+            st.markdown("### 原始數據內容 (前 200 字):")
+            st.code(raw_b64[:200] + "...")
             
-            # 嘗試用普通 text 顯示 (不進行 JSON 轉換)
-            st.subheader("原始文本內容 (Raw Text):")
-            st.text(response.text[:1000]) # 僅顯示前 1000 字以防頁面崩潰
-            
+            # 3. 提供完整數據下載
+            st.download_button(
+                label="下載完整 RaceMapChi Base64 字串",
+                data=raw_b64,
+                file_name=f"race_{race_no}_b64.txt"
+            )
         else:
-            st.error(f"抓取失敗，錯誤代碼：{response.status_code}")
-            
-    except Exception as e:
-        st.error(f"連線發生異常: {e}")
-
-st.info("這個版本不進行 Decode，僅確認伺服器是否有回傳數據。")
+            st.error("JSON 中找不到 'RaceMapChi' 欄位。")
+    else:
+        st.error(f"連線失敗，狀態碼: {response.status_code}")
