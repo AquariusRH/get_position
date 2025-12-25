@@ -93,4 +93,11 @@ if st.sidebar.button("開始自動分析"):
                 
                 # 下載按鈕
                 csv = df.to_csv(index=False).encode('utf-8-sig')
-                st.download_button("下載分析報表 (CSV)", csv, f
+                st.download_button("下載分析報表 (CSV)", csv, f"race_{race_num}_analysis.csv", "text/csv")
+
+            except (KeyError, IndexError):
+                st.warning("此場次的詳細走位數據尚未更新。")
+
+# 說明文字
+st.divider()
+st.caption("數據來源：香港賽馬會 SpeedPRO。分析僅供參考。")
