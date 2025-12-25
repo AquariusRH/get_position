@@ -7,7 +7,7 @@ from PIL import Image
 
 # 頁面配置
 st.set_page_config(page_title="HKJC SpeedPro 自動分析", layout="wide")
-st.title("🏇 香港賽馬會 SpeedPRO 走位全自動分析")
+st.title("🏇香港賽馬會 SpeedPRO 走位全自動分析")
 
 # --- 1. 定義數據抓取函數 ---
 def get_race_data(race_no):
