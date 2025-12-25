@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 
-st.title("HKJC 數據抓取測試")
+st.title("HKJC數據抓取測試")
 
 # 設置場次
 race_num = st.sidebar.number_input("場次", min_value=1, max_value=14, value=1)
