@@ -28,7 +28,7 @@ def get_race_map(race_no):
     return None
 
 # 設定頁面
-st.set_page_config(page_title="賽馬跑法與檔位分析器_test", layout="wide")
+st.set_page_config(page_title="賽馬跑法與檔位分析器", layout="wide")
 # --- 偵錯測試區 ---
 st.sidebar.subheader("🔍 API 測試狀態")
 test_race_no = (len(st.session_state.race_history) // 4) + 1
@@ -63,6 +63,7 @@ try:
 except Exception as e:
     st.sidebar.error(f"發生錯誤: {e}")
 # --- 測試結束 ---
+
 # 1. 初始化數據紀錄 (Session State)
 if 'race_history' not in st.session_state:
     st.session_state.race_history = []
@@ -74,7 +75,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🐎 賽馬算法：多場累積偏差分析")
+st.title("🐎 賽馬算法：多場累積偏差分析_test")
 
 # 計算目前狀態
 total_rows = len(st.session_state.race_history)
