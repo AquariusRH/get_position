@@ -30,39 +30,28 @@ def get_race_map(race_no):
 # 設定頁面
 st.set_page_config(page_title="賽馬跑法與檔位分析器", layout="wide")
 # --- 偵錯測試區 ---
-st.sidebar.subheader("🔍 API 測試狀態")
-test_race_no =  1
-test_url = f"https://racing.hkjc.com/racing/speedpro/assets/json/formguide/race_{test_race_no}.json"
-
-try:
-    # 模擬更完整的瀏覽器 Header
-    test_headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/javascript, */*; q=0.01",
-        "Referer": "https://racing.hkjc.com/racing/speedpro/chinese/formguide/formguide.html",
-        "X-Requested-With": "XMLHttpRequest"
+# --- 在 sidebar 或主界面顯示 JSON 內容 ---
+with st.expander("🔍 原始 JSON 數據偵錯"):
+    test_race_no =  1
+    test_url = f"https://racing.hkjc.com/racing/speedpro/assets/json/formguide/race_{test_race_no}.json"
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://racing.hkjc.com/racing/speedpro/chinese/formguide/formguide.html"
     }
     
-    resp = requests.get(test_url, headers=test_headers, timeout=5)
+    response = requests.get(test_url, headers=headers)
     
-    if resp.status_code == 200:
-        st.sidebar.success(f"API 連線成功 (Race {test_race_no})")
-        # 檢查 JSON 內容是否完整
+    if response.status_code == 200:
         try:
-            json_data = resp.json()
-            st.write(json_data[:1000])
-            if "RaceMapChi" in json_data:
-                st.sidebar.info("✅ 成功解析 JSON 並找到 RaceMapChi")
-            else:
-                st.sidebar.warning("⚠️ JSON 格式不符 (缺少 RaceMapChi)")
-        except:
-            st.sidebar.error("❌ 無法解析為 JSON 格式")
+            json_data = response.json()
+            # 使用 st.json 會自動排版，方便閱讀
+            st.json(json_data) 
+        except Exception as e:
+            st.error(f"解析 JSON 失敗: {e}")
+            st.text(response.text) # 如果解析失敗，印出原始文本看看是什麼
     else:
-        st.sidebar.error(f"連線失敗! 狀態碼: {resp.status_code}")
-        st.sidebar.write("請確認比賽日當天該 JSON 是否已上傳。")
-
-except Exception as e:
-    st.sidebar.error(f"發生錯誤: {e}")
+        st.error(f"無法讀取 API (Status Code: {response.status_code})")
 # --- 測試結束 ---
 
 # 1. 初始化數據紀錄 (Session State)
