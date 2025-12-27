@@ -30,7 +30,7 @@ def get_race_map(race_no):
 # 設定頁面
 st.set_page_config(page_title="賽馬跑法與檔位分析器", layout="wide")
 # --- 偵錯測試區 ---
-st.sidebar.subheader("🔍 API 測試狀態")
+st.sidebar.subheader("🔍 API測試狀態")
 test_race_no = (len(st.session_state.race_history) // 4) + 1
 test_url = f"https://racing.hkjc.com/racing/speedpro/assets/json/formguide/race_{test_race_no}.json"
 
