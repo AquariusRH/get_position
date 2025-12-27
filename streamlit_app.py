@@ -32,7 +32,7 @@ st.set_page_config(page_title="賽馬跑法與檔位分析器", layout="wide")
 # --- 偵錯測試區 ---
 # --- 在 sidebar 或主界面顯示 JSON 內容 ---
 st.sidebar.header("🔍 JSON 數據偵錯")
-test_race_no = (len(st.session_state.race_history) // 4) + 1
+test_race_no =  1
 test_url = f"https://racing.hkjc.com/racing/speedpro/assets/json/formguide/race_{test_race_no}.json"
 
 headers = {
