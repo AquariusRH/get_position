@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import requests
-
 
 # 設定頁面
 st.set_page_config(page_title="賽馬跑法與檔位分析器", layout="wide")
@@ -19,8 +17,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 st.title("🐎 賽馬算法：多場累積偏差分析")
-# 在 Streamlit 中加入網頁連結
-st.markdown(f"🔗 [點此開啟馬會走位圖網頁 (第 {current_race_num} 場)](https://racing.hkjc.com/racing/speedpro/chinese/formguide/formguide.html)")
+
 # 計算目前狀態
 total_rows = len(st.session_state.race_history)
 current_race_num = (total_rows // 4) + 1
@@ -45,13 +42,8 @@ with st.sidebar:
 # --- 2. 數據輸入區 ---
 st.header(f"📝 輸入第 {current_race_num} 場結果")
 
-# --- 新增：顯示馬會走位圖 ---
-with st.expander(f"查看第 {current_race_num} 場參考走位圖", expanded=True):
-    speed_map = get_race_map(current_race_num)
-    if speed_map:
-        st.image(speed_map, use_container_width=True)
-    else:
-        st.warning("暫時無法從馬會獲取走位圖，請手動觀察。")
+# --- 這裡加入你要求的連結 ---
+st.markdown(f"🔗 [點此開啟馬會走位圖網頁](https://racing.hkjc.com/racing/speedpro/chinese/formguide/formguide.html)")
 
 rank_scores = {"第一名": 4, "第二名": 3, "第三名": 2, "第四名": 1}
 
