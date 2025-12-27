@@ -50,6 +50,7 @@ try:
         # 檢查 JSON 內容是否完整
         try:
             json_data = resp.json()
+            st.write(json_data[:1000])
             if "RaceMapChi" in json_data:
                 st.sidebar.info("✅ 成功解析 JSON 並找到 RaceMapChi")
             else:
