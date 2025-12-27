@@ -2,67 +2,10 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import requests
-import base64
-from PIL import Image
-from io import BytesIO
 
-# --- 新增：抓取馬會走位圖函數 ---
-def get_race_map(race_no):
-    """從馬會 API 獲取特定場次的走位圖圖片"""
-    api_url = f"https://racing.hkjc.com/racing/speedpro/assets/json/formguide/race_{race_no}.json"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-        "Referer": "https://racing.hkjc.com/racing/speedpro/chinese/formguide/formguide.html"
-    }
-    try:
-        response = requests.get(api_url, headers=headers, timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            base64_img = data.get("RaceMapChi", "")
-            if "," in base64_img:
-                base64_data = base64_img.split(",")[1]
-                img_data = base64.b64decode(base64_data)
-                return Image.open(BytesIO(img_data))
-    except Exception:
-        return None
-    return None
 
 # 設定頁面
 st.set_page_config(page_title="賽馬跑法與檔位分析器", layout="wide")
-# --- 偵錯測試區 ---
-# --- 在 sidebar 或主界面顯示 JSON 內容 ---
-st.sidebar.header("🔍 JSON 數據偵錯")
-test_race_no =  1
-test_url = f"https://racing.hkjc.com/racing/speedpro/assets/json/formguide/race_{test_race_no}.json"
-
-headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    "Referer": "https://racing.hkjc.com/racing/speedpro/chinese/formguide/formguide.html"
-}
-
-if st.sidebar.button("檢查第 {} 場 JSON".format(test_race_no)):
-    try:
-        resp = requests.get(test_url, headers=headers, timeout=5)
-        if resp.status_code == 200:
-            json_data = resp.json()
-            
-            # 1. 檢查 RaceMapChi 是否存在
-            if "RaceMapChi" in json_data:
-                st.sidebar.success("找到 RaceMapChi 欄位！")
-                
-                # 2. 顯示該欄位的前 100 個字元 (避免頁面崩潰)
-                map_str = json_data["RaceMapChi"]
-                st.sidebar.code(f"數據開頭: {map_str[:100]}...", language="text")
-                
-                # 3. 打印完整 JSON 供查看
-                with st.expander("查看完整 JSON 內容"):
-                    st.json(json_data)
-            else:
-                st.sidebar.error("JSON 中找不到 RaceMapChi 欄位")
-        else:
-            st.sidebar.error(f"連線失敗，代碼: {resp.status_code}")
-    except Exception as e:
-        st.sidebar.error(f"錯誤: {e}")
 
 # 1. 初始化數據紀錄 (Session State)
 if 'race_history' not in st.session_state:
@@ -75,8 +18,9 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🐎 賽馬算法：多場累積偏差分析_test")
-
+st.title("🐎 賽馬算法：多場累積偏差分析")
+# 在 Streamlit 中加入網頁連結
+st.markdown(f"🔗 [點此開啟馬會走位圖網頁 (第 {current_race_num} 場)](https://racing.hkjc.com/racing/speedpro/chinese/formguide/formguide.html)")
 # 計算目前狀態
 total_rows = len(st.session_state.race_history)
 current_race_num = (total_rows // 4) + 1
