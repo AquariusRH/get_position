@@ -1,6 +1,31 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import requests
+import base64
+from PIL import Image
+from io import BytesIO
+
+# --- 新增：抓取馬會走位圖函數 ---
+def get_race_map(race_no):
+    """從馬會 API 獲取特定場次的走位圖圖片"""
+    api_url = f"https://racing.hkjc.com/racing/speedpro/assets/json/formguide/race_{race_no}.json"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+        "Referer": "https://racing.hkjc.com/racing/speedpro/chinese/formguide/formguide.html"
+    }
+    try:
+        response = requests.get(api_url, headers=headers, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            base64_img = data.get("RaceMapChi", "")
+            if "," in base64_img:
+                base64_data = base64_img.split(",")[1]
+                img_data = base64.b64decode(base64_data)
+                return Image.open(BytesIO(img_data))
+    except Exception:
+        return None
+    return None
 
 # 設定頁面
 st.set_page_config(page_title="賽馬跑法與檔位分析器", layout="wide")
@@ -41,6 +66,15 @@ with st.sidebar:
 
 # --- 2. 數據輸入區 ---
 st.header(f"📝 輸入第 {current_race_num} 場結果")
+
+# --- 新增：顯示馬會走位圖 ---
+with st.expander(f"查看第 {current_race_num} 場參考走位圖", expanded=True):
+    speed_map = get_race_map(current_race_num)
+    if speed_map:
+        st.image(speed_map, use_container_width=True)
+    else:
+        st.warning("暫時無法從馬會獲取走位圖，請手動觀察。")
+
 rank_scores = {"第一名": 4, "第二名": 3, "第三名": 2, "第四名": 1}
 
 cols = st.columns(4)
@@ -123,49 +157,3 @@ if st.session_state.race_history:
 
 else:
     st.info("👋 歡迎！請輸入第一場比賽數據後按「儲存」開始分析。")
-
-import streamlit as st
-import requests
-import base64
-from PIL import Image
-from io import BytesIO
-
-def get_race_map_from_api(race_no=1):
-    # 從你的截圖中獲取的 API URL
-    api_url = f"https://racing.hkjc.com/racing/speedpro/assets/json/formguide/race_{race_no}.json"
-    
-    # 模擬請求標頭
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-        "Referer": "https://racing.hkjc.com/racing/speedpro/chinese/formguide/formguide.html"
-    }
-    
-    response = requests.get(api_url, headers=headers)
-    
-    if response.status_code == 200:
-        data = response.json()
-        # 提取 Base64 圖片字串
-        base64_img = data.get("RaceMapChi", "")
-        
-        if base64_img.startswith("data:image"):
-            # 移除 data:image/jpeg;base64, 前綴
-            base64_data = base64_img.split(",")[1]
-            img_data = base64.b64decode(base64_data)
-            return Image.open(BytesIO(img_data)), data.get("RaceInfoChi", {})
-    return None, None
-
-st.title("馬會走位圖自動提取器")
-
-race_num = st.number_input("輸入場次", min_value=1, max_value=12, value=1)
-
-if st.button("獲取走位圖"):
-    with st.spinner("讀取 API 數據中..."):
-        img, info = get_race_map_from_api(race_num)
-        
-        if img:
-            # 顯示比賽資訊
-            st.subheader(f"第 {race_num} 場: {info.get('RaceName')} ({info.get('Distance')})")
-            # 顯示走位圖圖片
-            st.image(img, caption=f"場次 {race_num} 走位圖", use_container_width=True)
-        else:
-            st.error("無法獲取資料，請檢查 API URL 或場次是否正確。")
