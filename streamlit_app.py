@@ -9,16 +9,16 @@ st.set_page_config(page_title="賽馬跑法與檔位分析器", layout="wide")
 if 'race_history' not in st.session_state:
     st.session_state.race_history = []
 
-# 自定義 CSS 隱藏某些互動組件（可選）
+# 自定義 CSS 隱藏某些互動組件
 st.markdown("""
     <style>
-    .stPlotlyChart { pointer-events: none; } /* 全局禁止圖表鼠標事件，若需 Tooltip 則刪除此行 */
+    .stPlotlyChart { pointer-events: none; } 
     </style>
     """, unsafe_allow_html=True)
 
 st.title("🐎 賽馬算法：多場累積偏差分析")
 
-# 計算目前狀態
+# --- 關鍵修正：先計算變數，再供下方連結使用 ---
 total_rows = len(st.session_state.race_history)
 current_race_num = (total_rows // 4) + 1
 
@@ -42,8 +42,8 @@ with st.sidebar:
 # --- 2. 數據輸入區 ---
 st.header(f"📝 輸入第 {current_race_num} 場結果")
 
-# --- 這裡加入你要求的連結 ---
-st.markdown(f"🔗 [點此開啟馬會走位圖網頁](https://racing.hkjc.com/racing/speedpro/chinese/formguide/formguide.html)")
+# 顯示連結 (已修正 NameError)
+st.markdown(f"🔗 [點此開啟馬會走位圖網頁 (第 {current_race_num} 場參考)](https://racing.hkjc.com/racing/speedpro/chinese/formguide/formguide.html)")
 
 rank_scores = {"第一名": 4, "第二名": 3, "第三名": 2, "第四名": 1}
 
@@ -79,7 +79,7 @@ if st.session_state.race_history:
     style_stats = full_df.groupby('跑法')['得分'].sum().reset_index()
     draw_stats = full_df.groupby('檔位')['得分'].sum().reset_index()
 
-    # 確保所有類別都出現在圖表中（即使是0分）
+    # 確保所有類別都出現在圖表中
     style_stats = style_stats.set_index('跑法').reindex(["領放", "中置", "後追"], fill_value=0).reset_index()
     draw_stats = draw_stats.set_index('檔位').reindex(["內欄", "二疊", "外檔"], fill_value=0).reset_index()
 
@@ -87,10 +87,8 @@ if st.session_state.race_history:
 
     with col_res1:
         st.subheader("🏃 跑法累積得分 (靜態圖)")
-        # 使用 Plotly 建立棒形圖
         fig_style = px.bar(style_stats, x='跑法', y='得分', color='跑法', 
                            color_discrete_map={"領放":"#FF4B4B", "中置":"#FFAA00", "後追":"#1C83E1"})
-        # 禁用所有拖拽與工具列
         st.plotly_chart(fig_style, use_container_width=True, config={'staticPlot': True})
         st.dataframe(style_stats.sort_values(by='得分', ascending=False), hide_index=True)
 
@@ -98,24 +96,21 @@ if st.session_state.race_history:
         st.subheader("🚧 檔位累積得分 (靜態圖)")
         fig_draw = px.bar(draw_stats, x='檔位', y='得分', color='檔位',
                           color_discrete_map={"內欄":"#00C0F2", "二疊":"#F0A3FF", "外檔":"#7D7D7D"})
-        # 禁用所有拖拽與工具列
         st.plotly_chart(fig_draw, use_container_width=True, config={'staticPlot': True})
         st.dataframe(draw_stats.sort_values(by='得分', ascending=False), hide_index=True)
 
     # --- 4. 歷史紀錄編輯區 ---
     st.subheader("📋 數據修訂表 (可直接點擊格子修改)")
-    # 使用 data_editor 進行即時編輯
     edited_df = st.data_editor(
         full_df, 
         num_rows="fixed", 
         column_config={
-            "得分": st.column_config.NumberColumn(disabled=True), # 禁止手動改分數，維持 4/3/2/1 邏輯
+            "得分": st.column_config.NumberColumn(disabled=True),
             "場次": st.column_config.NumberColumn(disabled=True)
         },
         key="main_editor"
     )
     
-    # 檢查是否有變動，若有則更新 Session
     if not edited_df.equals(full_df):
         st.session_state.race_history = edited_df.to_dict('records')
         st.rerun()
