@@ -16,7 +16,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🐎 賽馬算法：加權累積偏差分析")
+st.title("🐎 賽馬算法：指數加權偏差分析 (非線性)")
 
 # 計算目前狀態
 total_rows = len(st.session_state.race_history)
@@ -37,12 +37,13 @@ with st.sidebar:
             st.rerun()
     
     st.divider()
-    st.info("💡 **權重邏輯：** 最新一場的權重最高，分數會乘以其場次編號。")
+    st.info("💡 **指數權重邏輯：** 使用 1.2 的場次次方作為權重。這會讓最後幾場的結果對趨勢圖有決定性的影響。")
 
 # --- 2. 數據輸入區 ---
 st.header(f"📝 輸入第 {current_race_num} 場結果")
 
-st.markdown(f"🔗 [點此開啟馬會走位圖網頁 (第 {current_race_num} 場)](https://racing.hkjc.com/racing/speedpro/chinese/formguide/formguide.html)")
+# 顯示連結
+st.markdown(f"🔗 [點此開啟馬會走位圖網頁 (第 {current_race_num} 場參考)](https://racing.hkjc.com/racing/speedpro/chinese/formguide/formguide.html)")
 
 rank_scores = {"第一名": 4, "第二名": 3, "第三名": 2, "第四名": 1}
 
@@ -68,13 +69,13 @@ if st.button("💾 儲存此場結果", type="primary", use_container_width=True
 
 st.divider()
 
-# --- 3. 數據處理 (加上加權邏輯) ---
+# --- 3. 數據處理 (加上 Exponential Weighting) ---
 if st.session_state.race_history:
     full_df = pd.DataFrame(st.session_state.race_history)
     
-    # 計算加權分數：原始分數 * 場次
-    # 這樣第1場權重為1，第5場權重為5，實現「最新佔比最大」
-    full_df['加權得分'] = full_df['原始分數'] * full_df['場次']
+    # 指數權重計算：Score * (1.2 ^ Race_No)
+    # 此比例可讓最新幾場的佔比快速放大
+    full_df['加權得分'] = full_df['原始分數'] * (1.1 ** full_df['場次'])
 
     # 聚合加權得分
     style_stats = full_df.groupby('跑法')['加權得分'].sum().reset_index()
@@ -87,7 +88,7 @@ if st.session_state.race_history:
     col_res1, col_res2 = st.columns(2)
 
     with col_res1:
-        st.subheader("🏃 跑法加權累積 (趨勢圖)")
+        st.subheader("🏃 跑法加權 (指數趨勢)")
         fig_style = px.line(style_stats, x='跑法', y='加權得分', markers=True,
                             color_discrete_sequence=["#FF4B4B"])
         fig_style.update_traces(line=dict(width=4), marker=dict(size=12))
@@ -95,7 +96,7 @@ if st.session_state.race_history:
         st.dataframe(style_stats.sort_values(by='加權得分', ascending=False), hide_index=True)
 
     with col_res2:
-        st.subheader("🚧 檔位加權累積 (趨勢圖)")
+        st.subheader("🚧 檔位加權 (指數趨勢)")
         fig_draw = px.line(draw_stats, x='檔位', y='加權得分', markers=True,
                            color_discrete_sequence=["#00C0F2"])
         fig_draw.update_traces(line=dict(width=4), marker=dict(size=12))
@@ -109,21 +110,20 @@ if st.session_state.race_history:
         num_rows="fixed", 
         column_config={
             "原始分數": st.column_config.NumberColumn(disabled=True),
-            "加權得分": st.column_config.NumberColumn(disabled=True),
+            "加權得分": st.column_config.NumberColumn(disabled=True, format="%.2f"),
             "場次": st.column_config.NumberColumn(disabled=True)
         },
         key="main_editor"
     )
     
     if not edited_df.equals(full_df):
-        # 排除加權得分這類計算出來的欄位，只存原始數據
         st.session_state.race_history = edited_df.drop(columns=['加權得分']).to_dict('records')
         st.rerun()
 
     # 綜合建議
     top_style = style_stats.sort_values(by='加權得分', ascending=False).iloc[0]['跑法']
     top_draw = draw_stats.sort_values(by='加權得分', ascending=False).iloc[0]['檔位']
-    st.success(f"💡 **目前最優選 (加權後)：** 建議留意使用 **{top_style}** 跑法且排在 **{top_draw}** 的馬匹。")
+    st.success(f"💡 **目前最優選 (指數加權)：** 建議留意使用 **{top_style}** 跑法且排在 **{top_draw}** 的馬匹。")
 
 else:
     st.info("👋 歡迎！請輸入第一場比賽數據後按「儲存」開始分析。")
