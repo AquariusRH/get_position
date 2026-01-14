@@ -1,129 +1,123 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
+import numpy as np
 
 # 設定頁面
-st.set_page_config(page_title="賽馬跑法與檔位分析器", layout="wide")
+st.set_page_config(page_title="賽馬空間偏差分析器", layout="wide")
 
-# 1. 初始化數據紀錄 (Session State)
 if 'race_history' not in st.session_state:
     st.session_state.race_history = []
 
-# 自定義 CSS
-st.markdown("""
-    <style>
-    .stPlotlyChart { pointer-events: none; } 
-    </style>
-    """, unsafe_allow_html=True)
+st.title("🐎 賽馬空間偏差：座標點選分析")
 
-st.title("🐎 賽馬算法：指數加權偏差分析 (非線性)")
-
-# 計算目前狀態
-total_rows = len(st.session_state.race_history)
-current_race_num = (total_rows // 4) + 1
-
-# --- 側邊欄：管理功能 ---
+# --- 側邊欄 ---
 with st.sidebar:
     st.header("⚙️ 數據管理")
-    st.write(f"目前已記錄場次: **{total_rows // 4}**")
-    
-    if st.button("🚨 重置所有數據"):
+    if st.button("🚨 重置數據"):
         st.session_state.race_history = []
         st.rerun()
+    st.info("💡 **操作指南：** 在座標圖中點擊前四名的位置。X軸越左代表越前放，Y軸越下代表越內欄。")
+
+# --- 1. 座標輸入區 ---
+st.header("📍 標記第 {} 場前四名位置".format(len(st.session_state.race_history)//4 + 1))
+
+# 建立一個座標選取器 (這裡模擬一個可視化輸入介面)
+# X: 0(領放) -> 10(後追) | Y: 0(內欄) -> 10(外檔)
+col1, col2 = st.columns([1, 1])
+
+with col1:
+    st.write("請滑動下方拉條來標定位置（或未來整合點擊事件）")
     
-    if total_rows >= 4:
-        if st.button("🔙 刪除最後一場 (4行)"):
-            st.session_state.race_history = st.session_state.race_history[:-4]
-            st.rerun()
+    current_race_data = []
+    ranks = ["第一名", "第二名", "第三名", "第四名"]
+    scores = [4, 3, 2, 1]
     
-    st.divider()
-    st.info("💡 **指數權重邏輯：** 使用 1.2 的場次次方作為權重。這會讓最後幾場的結果對趨勢圖有決定性的影響。")
+    tabs = st.tabs(ranks)
+    for i, tab in enumerate(tabs):
+        with tab:
+            c1, c2 = st.columns(2)
+            with c1:
+                pos_x = st.slider(f"{ranks[i]} 跑法 (0領放-10後追)", 0.0, 10.0, 5.0, key=f"x_{i}")
+            with c2:
+                pos_y = st.slider(f"{ranks[i]} 檔位 (0內欄-10外檔)", 0.0, 10.0, 2.0, key=f"y_{i}")
+            current_race_data.append({
+                "場次": len(st.session_state.race_history)//4 + 1,
+                "名次": ranks[i],
+                "Score": scores[i],
+                "X": pos_x,
+                "Y": pos_y
+            })
 
-# --- 2. 數據輸入區 ---
-st.header(f"📝 輸入第 {current_race_num} 場結果")
-
-# 顯示連結
-st.markdown(f"🔗 [點此開啟馬會走位圖網頁 (第 {current_race_num} 場參考)](https://racing.hkjc.com/racing/speedpro/chinese/formguide/formguide.html)")
-
-rank_scores = {"第一名": 4, "第二名": 3, "第三名": 2, "第四名": 1}
-
-cols = st.columns(4)
-current_input = []
-
-for i, (rank_name, score) in enumerate(rank_scores.items()):
-    with cols[i]:
-        st.subheader(rank_name)
-        style = st.selectbox(f"跑法", ["領放", "中置", "後追"], key=f"style_sel_{current_race_num}_{i}")
-        draw = st.selectbox(f"檔位", ["內欄", "二疊", "外檔"], key=f"draw_sel_{current_race_num}_{i}")
-        current_input.append({
-            "場次": current_race_num, 
-            "名次": rank_name, 
-            "原始分數": score, 
-            "跑法": style, 
-            "檔位": draw
-        })
-
-if st.button("💾 儲存此場結果", type="primary", use_container_width=True):
-    st.session_state.race_history.extend(current_input)
-    st.rerun()
-
-st.divider()
-
-# --- 3. 數據處理 (加上 Exponential Weighting) ---
-if st.session_state.race_history:
-    full_df = pd.DataFrame(st.session_state.race_history)
-    
-    # 指數權重計算：Score * (1.2 ^ Race_No)
-    # 此比例可讓最新幾場的佔比快速放大
-    full_df['加權得分'] = full_df['原始分數'] * (1.1 ** full_df['場次'])
-
-    # 聚合加權得分
-    style_stats = full_df.groupby('跑法')['加權得分'].sum().reset_index()
-    draw_stats = full_df.groupby('檔位')['加權得分'].sum().reset_index()
-
-    # 確保所有類別都存在
-    style_stats = style_stats.set_index('跑法').reindex(["領放", "中置", "後追"], fill_value=0).reset_index()
-    draw_stats = draw_stats.set_index('檔位').reindex(["內欄", "二疊", "外檔"], fill_value=0).reset_index()
-
-    col_res1, col_res2 = st.columns(2)
-
-    with col_res1:
-        st.subheader("🏃 跑法加權 (指數趨勢)")
-        fig_style = px.line(style_stats, x='跑法', y='加權得分', markers=True,
-                            color_discrete_sequence=["#FF4B4B"])
-        fig_style.update_traces(line=dict(width=4), marker=dict(size=12))
-        st.plotly_chart(fig_style, use_container_width=True, config={'staticPlot': True})
-        st.dataframe(style_stats.sort_values(by='加權得分', ascending=False), hide_index=True)
-
-    with col_res2:
-        st.subheader("🚧 檔位加權 (指數趨勢)")
-        fig_draw = px.line(draw_stats, x='檔位', y='加權得分', markers=True,
-                           color_discrete_sequence=["#00C0F2"])
-        fig_draw.update_traces(line=dict(width=4), marker=dict(size=12))
-        st.plotly_chart(fig_draw, use_container_width=True, config={'staticPlot': True})
-        st.dataframe(draw_stats.sort_values(by='加權得分', ascending=False), hide_index=True)
-
-    # --- 4. 歷史紀錄編輯區 ---
-    st.subheader("📋 數據修訂表")
-    edited_df = st.data_editor(
-        full_df, 
-        num_rows="fixed", 
-        column_config={
-            "原始分數": st.column_config.NumberColumn(disabled=True),
-            "加權得分": st.column_config.NumberColumn(disabled=True, format="%.2f"),
-            "場次": st.column_config.NumberColumn(disabled=True)
-        },
-        key="main_editor"
-    )
-    
-    if not edited_df.equals(full_df):
-        st.session_state.race_history = edited_df.drop(columns=['加權得分']).to_dict('records')
+    if st.button("💾 儲存此場位置紀錄", type="primary", use_container_width=True):
+        st.session_state.race_history.extend(current_race_data)
         st.rerun()
 
-    # 綜合建議
-    top_style = style_stats.sort_values(by='加權得分', ascending=False).iloc[0]['跑法']
-    top_draw = draw_stats.sort_values(by='加權得分', ascending=False).iloc[0]['檔位']
-    st.success(f"💡 **目前最優選 (指數加權)：** 建議留意使用 **{top_style}** 跑法且排在 **{top_draw}** 的馬匹。")
+# --- 2. 數據分析與視覺化 ---
+if st.session_state.race_history:
+    df = pd.DataFrame(st.session_state.race_history)
+    
+    # 計算指數加權 (最新場次權重最高)
+    df['Weight'] = df['Score'] * (1.1 ** df['場次'])
 
-else:
-    st.info("👋 歡迎！請輸入第一場比賽數據後按「儲存」開始分析。")
+    # 繪製偏差熱力圖
+    fig = go.Figure()
+
+    # 1. 繪製所有歷史點位
+    fig.add_trace(go.Scatter(
+        x=df['X'], y=df['Y'],
+        mode='markers',
+        marker=dict(
+            size=df['Weight'] * 5,
+            color=df['Weight'],
+            colorscale='Viridis',
+            showscale=True,
+            colorbar=dict(title="影響力指數")
+        ),
+        text=df['名次'],
+        name="歷史頭馬位置"
+    ))
+
+    # 2. 模擬生成「最佳位置範圍」 (使用簡易密度估計)
+    # 這裡我們用加權中心點來繪製一個推薦區域
+    avg_x = (df['X'] * df['Weight']).sum() / df['Weight'].sum()
+    avg_y = (df['Y'] * df['Weight']).sum() / df['Weight'].sum()
+
+    fig.add_shape(type="circle",
+        xref="x", yref="y",
+        x0=avg_x-1.5, y0=avg_y-1.5, x1=avg_x+1.5, y1=avg_y+1.5,
+        fillcolor="rgba(255, 75, 75, 0.3)",
+        line_color="Red",
+    )
+
+    fig.update_layout(
+        title="賽道偏差熱力圖 (紅色圈內為預測黃金地帶)",
+        xaxis=dict(title="跑法 (左:領放 <---> 右:後追)", range=[-1, 11]),
+        yaxis=dict(title="檔位 (下:內欄 <---> 上:外檔)", range=[11, -1]), # 倒置 Y 軸符合馬場直觀
+        height=600,
+        template="plotly_dark"
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    # --- 3. 輸出分析結果 ---
+    with col2:
+        st.subheader("🎯 戰略建議")
+        
+        def get_desc_x(x):
+            if x < 3: return "極速領放"
+            if x < 6: return "好位中置"
+            return "大外後追"
+        
+        def get_desc_y(y):
+            if y < 3: return "貼欄省腳程"
+            if y < 6: return "二三疊望空"
+            return "外疊衝刺"
+
+        st.metric("建議跑法重心", get_desc_x(avg_x))
+        st.metric("建議檔位取向", get_desc_y(avg_y))
+        
+        st.write("---")
+        st.write("**加權點位分布數據：**")
+        st.dataframe(df[['場次', '名次', 'X', 'Y', 'Weight']].sort_values('Weight', ascending=False), hide_index=True)
