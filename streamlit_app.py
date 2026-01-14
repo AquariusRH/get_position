@@ -4,144 +4,92 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 # 設定頁面
-st.set_page_config(page_title="賽馬座標偏差分析器", layout="wide")
+st.set_page_config(page_title="公平座標分析器", layout="wide")
 
-# 1. 初始化數據紀錄
 if 'race_history' not in st.session_state:
     st.session_state.race_history = []
 
-st.title("🐎 賽馬座標偏差分析 (固定疊位版)")
+st.title("🐎 賽馬公平分析：動態列數標準化")
 
-# 計算目前場次
+# --- 數據輸入區 ---
 total_rows = len(st.session_state.race_history)
 current_race_num = (total_rows // 4) + 1
 
-# --- 側邊欄：管理功能 ---
-with st.sidebar:
-    st.header("⚙️ 數據管理")
-    st.write(f"目前已記錄場次: **{total_rows // 4}**")
+with st.expander(f"📝 輸入第 {current_race_num} 場數據", expanded=True):
+    col_config, _ = st.columns([1, 1])
+    with col_config:
+        # 關鍵：讓用戶定義這一場「最長」到第幾列
+        max_cols = st.select_slider("這場走位圖總共有多少列水平位置？", options=[3, 4, 5, 6, 7, 8], value=6)
     
-    if st.button("🚨 重置所有數據"):
-        st.session_state.race_history = []
+    st.markdown(f"🔗 [馬會走位圖參考](https://racing.hkjc.com/racing/speedpro/chinese/formguide/formguide.html)")
+    
+    rank_scores = {"第一名": 4, "第二名": 3, "第三名": 2, "第四名": 1}
+    current_input = []
+    tabs = st.tabs(list(rank_scores.keys()))
+
+    for i, (rank_name, score) in enumerate(rank_scores.items()):
+        with tabs[i]:
+            c1, c2 = st.columns(2)
+            with c1:
+                # 動態調整選項範圍
+                pos_x = st.segmented_control(f"水平位置 (1:最後 → {max_cols}:最前)", 
+                                           options=list(range(1, max_cols + 1)), 
+                                           default=max_cols, key=f"x_{current_race_num}_{i}")
+            with c2:
+                pos_y = st.radio(f"垂直疊位", options=[1, 2, 3], horizontal=True, key=f"y_{current_race_num}_{i}")
+            
+            # 標準化計算：(位置 - 1) / (總列數 - 1) -> 縮放至 0~1
+            # 例如：5列中的第5列 = (5-1)/(5-1) = 1.0; 6列中的第6列 = (6-1)/(6-1) = 1.0 (公平！)
+            norm_x = (pos_x - 1) / (max_cols - 1) if max_cols > 1 else 1.0
+            
+            current_input.append({
+                "場次": current_race_num,
+                "名次": rank_name,
+                "Score": score,
+                "原始X": pos_x,
+                "總列數": max_cols,
+                "標準化X": norm_x * 10, # 放大回 0-10 方便繪圖
+                "Y": pos_y
+            })
+
+    if st.button("💾 儲存並公平計算", type="primary", use_container_width=True):
+        st.session_state.race_history.extend(current_input)
         st.rerun()
-    
-    if total_rows >= 4:
-        if st.button("🔙 刪除最後一場"):
-            st.session_state.race_history = st.session_state.race_history[:-4]
-            st.rerun()
-    
-    st.divider()
-    st.info("💡 **座標映射說明：**\n- **X 軸 (水平):** 0 (後追) → 10 (領放)\n- **Y 軸 (垂直):** 1:內欄, 2:二疊, 3:三疊/外")
 
-# --- 2. 數據輸入區 ---
-st.header(f"📝 輸入第 {current_race_num} 場結果")
-
-st.markdown(f"🔗 [點此開啟馬會走位圖網頁 (第 {current_race_num} 場參考)](https://racing.hkjc.com/racing/speedpro/chinese/formguide/formguide.html)")
-
-rank_scores = {"第一名": 4, "第二名": 3, "第三名": 2, "第四名": 1}
-current_input = []
-
-# 輸入介面
-tabs = st.tabs(list(rank_scores.keys()))
-
-for i, (rank_name, score) in enumerate(rank_scores.items()):
-    with tabs[i]:
-        st.write(f"請標記 **{rank_name}** 的位置：")
-        col_x, col_y = st.columns(2)
-        with col_x:
-            # 水平位置保持 Slider (0-10)
-            pos_x = st.slider(f"水平位置 (0:後追 ←→ 10:領放)", 0.0, 10.0, 5.0, step=0.5, key=f"x_{current_race_num}_{i}")
-        with col_y:
-            # 垂直位置改為固定三個選擇
-            pos_y = st.radio(f"垂直疊位", options=[1, 2, 3], format_func=lambda x: {1: "1 (內欄)", 2: "2 (二疊)", 3: "3 (三疊或外)"}[x], horizontal=True, key=f"y_{current_race_num}_{i}")
-        
-        current_input.append({
-            "場次": current_race_num,
-            "名次": rank_name,
-            "原始分數": score,
-            "X": pos_x,
-            "Y": pos_y
-        })
-
-if st.button("💾 儲存此場結果", type="primary", use_container_width=True):
-    st.session_state.race_history.extend(current_input)
-    st.rerun()
-
-st.divider()
-
-# --- 3. 數據視覺化 ---
+# --- 數據處理與繪圖 ---
 if st.session_state.race_history:
     df = pd.DataFrame(st.session_state.race_history)
-    
-    # 指數加權計算
-    df['加權得分'] = df['原始分數'] * (1.1 ** df['場次'])
+    df['加權得分'] = df['Score'] * (1.1 ** df['場次'])
 
-    # 繪製圖表
     fig = go.Figure()
 
-    # 歷史數據點
+    # 使用「標準化X」繪圖，確保不同列數的場次在圖中位置一致
     fig.add_trace(go.Scatter(
-        x=df['X'], y=df['Y'],
+        x=df['標準化X'], y=df['Y'],
         mode='markers+text',
-        marker=dict(
-            size=df['加權得分'] * 12,
-            color=df['加權得分'],
-            colorscale='Hot',
-            showscale=True,
-            line=dict(width=1, color='white')
-        ),
+        marker=dict(size=df['加權得分']*15, color=df['加權得分'], colorscale='Plasma', showscale=True),
         text=df['場次'].astype(str),
-        textposition="middle center",
-        name="獲獎位置"
+        textposition="middle center"
     ))
 
     # 計算加權中心
-    avg_x = (df['X'] * df['加權得分']).sum() / df['加權得分'].sum()
+    avg_x = (df['標準化X'] * df['加權得分']).sum() / df['加權得分'].sum()
     avg_y = (df['Y'] * df['加權得分']).sum() / df['加權得分'].sum()
 
-    # 繪製建議範圍（最佳區域）
-    fig.add_shape(type="rect", # 使用矩形在固定軌道上更直觀
-        xref="x", yref="y",
-        x0=avg_x-1.5, y0=avg_y-0.4, x1=avg_x+1.5, y1=avg_y+0.4,
-        fillcolor="rgba(0, 255, 0, 0.2)",
-        line=dict(color="Lime", width=2),
-    )
+    # 繪製最佳範圍
+    fig.add_shape(type="rect", x0=avg_x-1, y0=avg_y-0.3, x1=avg_x+1, y1=avg_y+0.3,
+                  fillcolor="rgba(0, 255, 0, 0.2)", line=dict(color="Lime"))
 
     fig.update_layout(
-        title="🏃 賽道偏差熱力圖 (1-3 軌道分布)",
-        xaxis=dict(
-            title="後追 (0) ←──────→ 領放 (10)", 
-            range=[-0.5, 10.5],
-            gridcolor='rgba(255,255,255,0.1)'
-        ),
-        yaxis=dict(
-            title="疊位 (1:內 / 2:中 / 3:外)", 
-            tickvals=[1, 2, 3],
-            ticktext=["1 (內欄)", "2 (二疊)", "3 (外疊)"],
-            range=[0.5, 3.5], 
-            gridcolor='rgba(255,255,255,0.1)'
-        ),
-        height=500,
-        template="plotly_dark",
-        showlegend=False
+        title="🏃 公平分析熱力圖 (標準化比例)",
+        xaxis=dict(title="相對位置 (0:極後追 ←→ 10:極領放)", range=[-0.5, 10.5], tickvals=[0, 5, 10], ticktext=["末尾", "中游", "領先"]),
+        yaxis=dict(title="疊位", tickvals=[1, 2, 3], range=[0.5, 3.5]),
+        template="plotly_dark"
     )
 
     st.plotly_chart(fig, use_container_width=True)
 
-    # --- 4. 分析結果 ---
-    res_l, res_r = st.columns([1, 2])
-    with res_l:
-        st.subheader("🎯 重心預測")
-        h_desc = "大後方衝刺" if avg_x < 3.5 else ("中游推進" if avg_x < 7 else "前方領放")
-        v_desc = "貼欄省腳程" if avg_y < 1.5 else ("二疊望空" if avg_y < 2.5 else "外疊包抄")
-        
-        st.success(f"**最佳跑法：** {h_desc}")
-        st.success(f"**最佳取線：** {v_desc}")
-        st.info(f"建議座標：X={avg_x:.1f}, Y={avg_y:.1f}")
-
-    with res_r:
-        st.subheader("📋 歷史紀錄")
-        st.dataframe(df[['場次', '名次', 'X', 'Y', '加權得分']].sort_values(by=['場次'], ascending=False), hide_index=True)
-
-else:
-    st.info("👋 請開始標記前四名位置。垂直位置已固定為 1 (內), 2 (二疊), 3 (外)。")
+    # 戰略建議
+    st.subheader("🎯 公平趨勢結論")
+    h_bias = "領放馬佔優" if avg_x > 7 else ("後追馬強勢" if avg_x < 3 else "均勢/看形勢")
+    st.success(f"跨場次綜合分析顯示：今天 **{h_bias}**，建議關注相對位置在 **{avg_x:.1f}** 附近的馬匹。")
