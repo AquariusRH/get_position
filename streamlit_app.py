@@ -10,7 +10,7 @@ st.set_page_config(page_title="賽馬座標偏差分析器", layout="wide")
 if 'race_history' not in st.session_state:
     st.session_state.race_history = []
 
-st.title("🐎 賽馬座標偏差分析 (右方 10 為領放)")
+st.title("🐎 賽馬座標偏差分析 (固定疊位版)")
 
 # 計算目前場次
 total_rows = len(st.session_state.race_history)
@@ -31,7 +31,7 @@ with st.sidebar:
             st.rerun()
     
     st.divider()
-    st.info("💡 **座標映射更新：**\n- **X 軸:** 0 (後追/最左) → 10 (領放/最右)\n- **Y 軸:** 0 (內欄/最下) → 10 (外疊/最上)")
+    st.info("💡 **座標映射說明：**\n- **X 軸 (水平):** 0 (後追) → 10 (領放)\n- **Y 軸 (垂直):** 1:內欄, 2:二疊, 3:三疊/外")
 
 # --- 2. 數據輸入區 ---
 st.header(f"📝 輸入第 {current_race_num} 場結果")
@@ -46,13 +46,14 @@ tabs = st.tabs(list(rank_scores.keys()))
 
 for i, (rank_name, score) in enumerate(rank_scores.items()):
     with tabs[i]:
-        st.write(f"請標記 **{rank_name}** 在走位圖的位置：")
+        st.write(f"請標記 **{rank_name}** 的位置：")
         col_x, col_y = st.columns(2)
         with col_x:
-            # 更新邏輯：0為後追，10為領放
-            pos_x = st.slider(f"水平位置 (0:後追/左 ←→ 10:領放/右)", 0.0, 10.0, 5.0, step=0.5, key=f"x_{current_race_num}_{i}")
+            # 水平位置保持 Slider (0-10)
+            pos_x = st.slider(f"水平位置 (0:後追 ←→ 10:領放)", 0.0, 10.0, 5.0, step=0.5, key=f"x_{current_race_num}_{i}")
         with col_y:
-            pos_y = st.slider(f"垂直位置 (0:內欄/下 ←→ 10:外疊/上)", 0.0, 10.0, 1.0, step=0.5, key=f"y_{current_race_num}_{i}")
+            # 垂直位置改為固定三個選擇
+            pos_y = st.radio(f"垂直疊位", options=[1, 2, 3], format_func=lambda x: {1: "1 (內欄)", 2: "2 (二疊)", 3: "3 (三疊或外)"}[x], horizontal=True, key=f"y_{current_race_num}_{i}")
         
         current_input.append({
             "場次": current_race_num,
@@ -83,9 +84,9 @@ if st.session_state.race_history:
         x=df['X'], y=df['Y'],
         mode='markers+text',
         marker=dict(
-            size=df['加權得分'] * 10,
+            size=df['加權得分'] * 12,
             color=df['加權得分'],
-            colorscale='Viridis',
+            colorscale='Hot',
             showscale=True,
             line=dict(width=1, color='white')
         ),
@@ -99,48 +100,48 @@ if st.session_state.race_history:
     avg_y = (df['Y'] * df['加權得分']).sum() / df['加權得分'].sum()
 
     # 繪製建議範圍（最佳區域）
-    fig.add_shape(type="circle",
+    fig.add_shape(type="rect", # 使用矩形在固定軌道上更直觀
         xref="x", yref="y",
-        x0=avg_x-1.2, y0=avg_y-1.2, x1=avg_x+1.2, y1=avg_y+1.2,
-        fillcolor="rgba(255, 75, 75, 0.3)", # 改為淡紅色圓圈更顯眼
-        line=dict(color="Red", width=2),
+        x0=avg_x-1.5, y0=avg_y-0.4, x1=avg_x+1.5, y1=avg_y+0.4,
+        fillcolor="rgba(0, 255, 0, 0.2)",
+        line=dict(color="Lime", width=2),
     )
 
     fig.update_layout(
-        title="🏃 賽道偏差熱力圖 (→ 右方為領放/終點方向)",
+        title="🏃 賽道偏差熱力圖 (1-3 軌道分布)",
         xaxis=dict(
             title="後追 (0) ←──────→ 領放 (10)", 
-            range=[-0.5, 10.5], # 正常順序，0在左，10在右
+            range=[-0.5, 10.5],
             gridcolor='rgba(255,255,255,0.1)'
         ),
         yaxis=dict(
-            title="內欄 (0) ↑ 外疊 (10)", 
-            range=[-0.5, 10.5], 
+            title="疊位 (1:內 / 2:中 / 3:外)", 
+            tickvals=[1, 2, 3],
+            ticktext=["1 (內欄)", "2 (二疊)", "3 (外疊)"],
+            range=[0.5, 3.5], 
             gridcolor='rgba(255,255,255,0.1)'
         ),
-        height=600,
+        height=500,
         template="plotly_dark",
         showlegend=False
     )
 
     st.plotly_chart(fig, use_container_width=True)
 
-    # --- 4. 結果分析 ---
+    # --- 4. 分析結果 ---
     res_l, res_r = st.columns([1, 2])
     with res_l:
-        st.subheader("🎯 核心偏差分析")
-        
-        # 根據 0-10 的邏輯給予文字描述
+        st.subheader("🎯 重心預測")
         h_desc = "大後方衝刺" if avg_x < 3.5 else ("中游推進" if avg_x < 7 else "前方領放")
-        v_desc = "貼欄省腳程" if avg_y < 3.5 else ("二、三疊望空" if avg_y < 7 else "外疊大包抄")
+        v_desc = "貼欄省腳程" if avg_y < 1.5 else ("二疊望空" if avg_y < 2.5 else "外疊包抄")
         
-        st.success(f"**建議跑法重心：** {h_desc}")
-        st.success(f"**建議取線位置：** {v_desc}")
-        st.info(f"建議目標座標：X={avg_x:.1f}, Y={avg_y:.1f}")
+        st.success(f"**最佳跑法：** {h_desc}")
+        st.success(f"**最佳取線：** {v_desc}")
+        st.info(f"建議座標：X={avg_x:.1f}, Y={avg_y:.1f}")
 
     with res_r:
-        st.subheader("📋 數據紀錄")
-        st.dataframe(df[['場次', '名次', 'X', 'Y', '加權得分']].sort_values(by=['場次', '加權得分'], ascending=[False, False]), hide_index=True)
+        st.subheader("📋 歷史紀錄")
+        st.dataframe(df[['場次', '名次', 'X', 'Y', '加權得分']].sort_values(by=['場次'], ascending=False), hide_index=True)
 
 else:
-    st.info("💡 請對照馬會走位圖，標記前四名馬匹的座標位置以開始分析。")
+    st.info("👋 請開始標記前四名位置。垂直位置已固定為 1 (內), 2 (二疊), 3 (外)。")
